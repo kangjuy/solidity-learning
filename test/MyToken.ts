@@ -69,4 +69,53 @@ describe("My Token", () => {
             ).to.be.revertedWith("insufficient balance");
         });
     });
+    describe("TransferFrom", () => {
+        it("should emit Approval event", async () => {
+            const signer1 = signers[1];
+            await expect(
+                myTokenC.approve(signer1.address, hre.ethers.parseUnits("10", decimals))
+        )
+            .to.emit(myTokenC, "Approval")
+            .withArgs(signer1.address, hre.ethers.parseUnits("10", decimals));
+        });
+        it("should be reverted with insufficient allowance error", async () => {
+            const signer0 = signers[0];
+            const signer1 = signers[1];
+            await expect (
+                myTokenC
+                    .connect(signer1)
+                    .transferFrom(
+                        signer0.address,
+                        signer1.address,
+                        hre.ethers.parseUnits("1", decimals)
+                    )
+            ).to.be.revertedWith("insufficient allowance");
+        })
+        it("should transfer approved amount and be reverted over minting amount", async () => {
+            const signer0 = signers[0];
+            const signer1 = signers[1];
+            const amount = hre.ethers.parseUnits("10", decimals);
+            await myTokenC.approve(signer1.address, amount);
+            await expect(
+                myTokenC
+                    .connect(signer1)
+                    .transferFrom(signer0.address, signer1.address, amount)
+            )
+                .to.emit(myTokenC, "Transfer")
+                .withArgs(signer0.address, signer1.address, amount);
+            expect(await myTokenC.balanceOf(signer1.address)).equal(amount);
+            expect(await myTokenC.balanceOf(signer0.address)).equal(
+                mintingAmount * 10n ** decimals - amount
+            );
+
+            const overAmount = hre.ethers.parseUnits((mintingAmount + 1n).toString(), decimals);
+            await myTokenC.approve(signer1.address, overAmount);
+            await expect(
+                myTokenC
+                    .connect(signer1)
+                    .transferFrom(signer0.address, signer1.address, overAmount)
+            ).to.be.revertedWithPanic(0x11);
+            expect(await myTokenC.balanceOf(signer1.address)).equal(amount);
+        });
+    });
 });
